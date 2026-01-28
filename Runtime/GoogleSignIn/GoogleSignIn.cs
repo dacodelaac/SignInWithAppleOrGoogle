@@ -74,7 +74,7 @@ namespace com.binouze
         {
             #if !UNITY_EDITOR
                 #if UNITY_ANDROID
-                    using var cls = new AndroidJavaClass("com.lagoonsoft.GoogleSignInHelper");
+                    using var cls = new AndroidJavaClass("com.binouze.GoogleSignInHelper");
                     cls.CallStatic("enableDebugLogging", enabled);
                 #elif UNITY_IOS
                     GoogleSignIn_EnableDebugLogging(enabled);
