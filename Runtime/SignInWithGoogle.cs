@@ -24,8 +24,11 @@ namespace com.binouze
             {
                 WebClientId    = settings.Google_WebClientID,
                 ClientId       = settings.Google_IosClientID, // ClientID is only used on IOS
-                RequestProfile = true,
-                RequestEmail   = true
+                RequestProfile = settings.Google_RequestProfile,
+                RequestEmail   = settings.Google_RequestEmail,
+                RequestIdToken = settings.Google_RequestIdToken,
+                RequestAuthCode = settings.Google_RequestAuthCode,
+                ForceTokenRefresh = settings.Google_ForceTokenRefresh,
             };
             GoogleSignIn.GetInstance().SetConfiguration( configuration );
             GoogleSignIn.OnAuthenticationFinished = OnAuthenticationFinished;
