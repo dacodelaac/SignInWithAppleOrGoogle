@@ -17,6 +17,11 @@ namespace com.binouze
         private SerializedProperty _Google_WebClientID;
         private SerializedProperty _Google_IosClientID;
         private SerializedProperty _Google_IosClientScheme;
+        private SerializedProperty _Google_RequestAuthCode;
+        private SerializedProperty _Google_ForceTokenRefresh;
+        private SerializedProperty _Google_RequestEmail;
+        private SerializedProperty _Google_RequestIdToken;
+        private SerializedProperty _Google_RequestProfile;
 
         public static SignInWithAppleOrGoogleSettings LoadSettingsInstance()
         {
@@ -52,6 +57,11 @@ namespace com.binouze
             _Google_WebClientID     = serializedObject.FindProperty("_Google_WebClientID");
             _Google_IosClientID     = serializedObject.FindProperty("_Google_IosClientID");
             _Google_IosClientScheme = serializedObject.FindProperty("_Google_IosClientScheme");
+            _Google_RequestAuthCode = serializedObject.FindProperty("_Google_RequestAuthCode");
+            _Google_ForceTokenRefresh = serializedObject.FindProperty("_Google_ForceTokenRefresh");
+            _Google_RequestEmail = serializedObject.FindProperty("_Google_RequestEmail");
+            _Google_RequestIdToken = serializedObject.FindProperty("_Google_RequestIdToken");
+            _Google_RequestProfile = serializedObject.FindProperty("_Google_RequestProfile");
         }
 
         public override void OnInspectorGUI()
@@ -85,6 +95,21 @@ namespace com.binouze
             EditorGUI.BeginDisabledGroup( true );
             EditorGUILayout.PropertyField(_Google_IosClientScheme, new GUIContent("iOS Scheme:"));
             EditorGUI.EndDisabledGroup();
+            EditorGUI.indentLevel--;
+
+            EditorGUILayout.Separator();
+            EditorGUILayout.Separator();
+            EditorGUILayout.Separator();
+            
+            EditorGUILayout.LabelField("Google OAuth2 Configuration:", EditorStyles.boldLabel);
+            EditorGUILayout.Separator();
+            
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(_Google_RequestAuthCode, new GUIContent("Request Auth Code:"));
+            EditorGUILayout.PropertyField(_Google_ForceTokenRefresh, new GUIContent("Force Token Refresh:"));
+            EditorGUILayout.PropertyField(_Google_RequestEmail, new GUIContent("Request Email:"));
+            EditorGUILayout.PropertyField(_Google_RequestIdToken, new GUIContent("Request ID Token:"));
+            EditorGUILayout.PropertyField(_Google_RequestProfile, new GUIContent("Request Profile:"));
             EditorGUI.indentLevel--;
             
             EditorGUILayout.Separator();
