@@ -29,6 +29,9 @@
     
     @public
     BOOL modalOpen;
+    
+    @public
+    NSString* tempAuthCode;
 }
 
 @property(class, nonatomic, readonly) GoogleSignInHandler *sharedInstance;

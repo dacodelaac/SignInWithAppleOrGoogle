@@ -18,6 +18,8 @@
 #import <GoogleSignIn/GIDGoogleUser.h>
 #import <GoogleSignIn/GIDProfileData.h>
 #import <GoogleSignIn/GIDSignIn.h>
+#import <GoogleSignIn/GIDToken.h>
+#import <GoogleSignIn/GIDSignInResult.h>
 #import <UnityAppController.h>
 
 #import "UnityInterface.h"
@@ -175,6 +177,7 @@ void DoSendUnityMessage(int status, GIDGoogleUser* user)
     if( user != nil )
     {
         NSString* img = user.profile != nil && user.profile.hasImage ? [[user.profile imageURLWithDimension:1000] absoluteString] : @"";
+        NSString* authCode = [GoogleSignInHandler sharedInstance]->tempAuthCode != nil ? [GoogleSignInHandler sharedInstance]->tempAuthCode : @"";
         dic = @{
             @"Status":      [NSNumber numberWithInt:status],
             @"DisplayName": user.profile != nil ? user.profile.name : @"",
@@ -184,7 +187,7 @@ void DoSendUnityMessage(int status, GIDGoogleUser* user)
             @"UserId":      user.userID,
             @"PhotoUrl":    img != nil ? img : @"",
             @"IdToken":     (user.idToken != nil && user.idToken.tokenString != nil) ? user.idToken.tokenString : @"",
-            @"AuthCode":    user.serverAuthCode != nil ? user.serverAuthCode : @""
+            @"AuthCode":    authCode
         };
     }
     else
@@ -201,6 +204,9 @@ void DoSendUnityMessage(int status, GIDGoogleUser* user)
     NSData *data        = [NSJSONSerialization dataWithJSONObject:result options:kNilOptions error:nil];
     NSString *json      = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     const char *payload = (const char*) [json UTF8String];
+    
+    // reset tempAuthCode
+    [GoogleSignInHandler sharedInstance]->tempAuthCode = nil;
     
     NSLog(@"OnSignInResult: %@", json);
     UnitySendMessage( "GoogleSignInHelperObject", "OnSignInResult", payload );
@@ -323,6 +329,9 @@ extern "C" {
                                                     additionalScopes:[GoogleSignInHandler sharedInstance]->additionalScopes
                                                           completion:^(GIDSignInResult * _Nullable signInResult, NSError * _Nullable error)
          {
+            if (signInResult != nil) {
+                [GoogleSignInHandler sharedInstance]->tempAuthCode = signInResult.serverAuthCode;
+            }
             [[GoogleSignInHandler sharedInstance] signIn:[GIDSignIn sharedInstance]
                                         didSignInForUser:GIDSignIn.sharedInstance.currentUser
                                                withError:error];
