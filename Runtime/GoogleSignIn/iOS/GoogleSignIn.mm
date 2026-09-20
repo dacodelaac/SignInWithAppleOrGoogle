@@ -182,7 +182,9 @@ void DoSendUnityMessage(int status, GIDGoogleUser* user)
             @"FamilyName":  user.profile != nil && user.profile.familyName != nil ? user.profile.familyName : @"",
             @"Email":       user.profile != nil ? user.profile.email : @"",
             @"UserId":      user.userID,
-            @"PhotoUrl":    img != nil ? img : @""
+            @"PhotoUrl":    img != nil ? img : @"",
+            @"IdToken":     (user.idToken != nil && user.idToken.tokenString != nil) ? user.idToken.tokenString : @"",
+            @"AuthCode":    user.serverAuthCode != nil ? user.serverAuthCode : @""
         };
     }
     else
