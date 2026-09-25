@@ -111,87 +111,102 @@ public class GoogleSignInHelper
 
     public static void _signIn( boolean silent )
     {
-        logDebug("AuthHelperFragment.authenticate called! " + _webClientId );
-
-        // get the credential manager
-        CredentialManager credentialManager = CredentialManager.create(UnityPlayer.currentActivity);
-
-
-
-        GetCredentialRequest credentialRequest;
-        if( _useSignInWithGoogleForm )
-        {
-            GetSignInWithGoogleOption siwg =  new GetSignInWithGoogleOption.Builder(_webClientId).build();
-            // create the credential request
-            credentialRequest = new GetCredentialRequest.Builder()
-                    .addCredentialOption(siwg)
-                    .build();
-        }
-        else
-        {
-            // option sign in with google
-            GetGoogleIdOption gid = new GetGoogleIdOption.Builder()
-                    .setServerClientId(_webClientId)
-                    .setFilterByAuthorizedAccounts(silent)
-                    .setAutoSelectEnabled(silent)
-                    .build();
-
-            // create the credential request
-            credentialRequest = new GetCredentialRequest.Builder()
-                    .addCredentialOption(gid)
-                    .build();
+        if (UnityPlayer.currentActivity == null) {
+            logError("UnityPlayer.currentActivity is null!");
+            nativeOnCredentialManagerResult(8, null);
+            return;
         }
 
-        // launch the sign in flow
-        credentialManager.getCredentialAsync(
-                UnityPlayer.currentActivity,
-                credentialRequest,
-                new CancellationSignal(),
-                Executors.newSingleThreadExecutor(),
-                new CredentialManagerCallback<>() {
-                    @Override
-                    public void onResult(GetCredentialResponse result)
-                    {
-                        Credential credential = result.getCredential();
+        UnityPlayer.currentActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    logDebug("AuthHelperFragment.authenticate called! " + _webClientId );
 
-                        if( credential instanceof CustomCredential )
-                        {
-                            if( GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType()) )
-                            {
-                                try
-                                {
-                                    GoogleIdTokenCredential customCred = GoogleIdTokenCredential.createFrom(credential.getData());
-                                    // call the response handler
-                                    nativeOnCredentialManagerResult(0, customCred);
-                                }
-                                catch( Exception e )
-                                {
-                                    // call the response handler with status failed
-                                    logErrorWithError("Failed to parse an GoogleIdTokenCredential", e);
-                                    nativeOnCredentialManagerResult(8,null);
-                                }
-                            }
-                            else
-                            {
-                                // call the response handler with status failed
-                                logError("Unexpected type of credential");
-                                nativeOnCredentialManagerResult(8,null);
-                            }
-                        }
+                    // get the credential manager
+                    CredentialManager credentialManager = CredentialManager.create(UnityPlayer.currentActivity);
+
+                    GetCredentialRequest credentialRequest;
+                    if( _useSignInWithGoogleForm )
+                    {
+                        GetSignInWithGoogleOption siwg = new GetSignInWithGoogleOption.Builder(_webClientId).build();
+                        // create the credential request
+                        credentialRequest = new GetCredentialRequest.Builder()
+                                .addCredentialOption(siwg)
+                                .build();
+                    }
+                    else
+                    {
+                        // option sign in with google
+                        GetGoogleIdOption gid = new GetGoogleIdOption.Builder()
+                                .setServerClientId(_webClientId)
+                                .setFilterByAuthorizedAccounts(silent)
+                                .setAutoSelectEnabled(silent)
+                                .build();
+
+                        // create the credential request
+                        credentialRequest = new GetCredentialRequest.Builder()
+                                .addCredentialOption(gid)
+                                .build();
                     }
 
-                    @Override
-                    public void onError(@NonNull GetCredentialException e)
-                    {
-                        logErrorWithError("GetCredentialException ", e);
+                    // launch the sign in flow
+                    credentialManager.getCredentialAsync(
+                            UnityPlayer.currentActivity,
+                            credentialRequest,
+                            new CancellationSignal(),
+                            Executors.newSingleThreadExecutor(),
+                            new CredentialManagerCallback<>() {
+                                @Override
+                                public void onResult(GetCredentialResponse result)
+                                {
+                                    Credential credential = result.getCredential();
 
-                        // canceled ou internal error
-                        if( e instanceof GetCredentialCancellationException )
-                            nativeOnCredentialManagerResult(2,null);
-                        else
-                            nativeOnCredentialManagerResult(8,null);
-                    }
-                });
+                                    if( credential instanceof CustomCredential )
+                                    {
+                                        if( GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType()) )
+                                        {
+                                            try
+                                            {
+                                                GoogleIdTokenCredential customCred = GoogleIdTokenCredential.createFrom(credential.getData());
+                                                // call the response handler
+                                                nativeOnCredentialManagerResult(0, customCred);
+                                            }
+                                            catch( Exception e )
+                                            {
+                                                // call the response handler with status failed
+                                                logErrorWithError("Failed to parse an GoogleIdTokenCredential", e);
+                                                nativeOnCredentialManagerResult(8,null);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // call the response handler with status failed
+                                            logError("Unexpected type of credential");
+                                            nativeOnCredentialManagerResult(8,null);
+                                        }
+                                    }
+                                }
+
+                                @Override
+                                public void onError(@NonNull GetCredentialException e)
+                                {
+                                    logErrorWithError("GetCredentialException ", e);
+
+                                    // canceled ou internal error
+                                    if( e instanceof GetCredentialCancellationException )
+                                        nativeOnCredentialManagerResult(2,null);
+                                    else
+                                        nativeOnCredentialManagerResult(8,null);
+                                }
+                            });
+                }
+                catch (Exception ex) {
+                    logErrorWithError("Exception during _signIn", ex);
+                    nativeOnCredentialManagerResult(8, null);
+                }
+            }
+        });
     }
 
     public static void nativeOnCredentialManagerResult( int result, GoogleIdTokenCredential acct )
@@ -260,26 +275,43 @@ public class GoogleSignInHelper
 
     public static void signOut() 
     {
-        logDebug("AuthHelperFragment.signOut called!");
+        if (UnityPlayer.currentActivity == null) {
+            logError("UnityPlayer.currentActivity is null in signOut!");
+            nativeOnCredentialManagerResult(-2, null);
+            return;
+        }
 
-        ClearCredentialStateRequest req = new ClearCredentialStateRequest();
-        // get the credential manager
-        CredentialManager credentialManager = CredentialManager.create(UnityPlayer.currentActivity);
-        credentialManager.clearCredentialStateAsync(
-                req,
-                new CancellationSignal(),
-                Executors.newSingleThreadExecutor(),
-                new CredentialManagerCallback<>() {
-                    @Override
-                    public void onResult(Void unused) {
-                        nativeOnCredentialManagerResult(-2,null);
-                    }
-                    @Override
-                    public void onError(@NonNull ClearCredentialException e)
-                    {
-                        nativeOnCredentialManagerResult(-2,null);
-                    }
-                });
+        UnityPlayer.currentActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    logDebug("AuthHelperFragment.signOut called!");
+
+                    ClearCredentialStateRequest req = new ClearCredentialStateRequest();
+                    // get the credential manager
+                    CredentialManager credentialManager = CredentialManager.create(UnityPlayer.currentActivity);
+                    credentialManager.clearCredentialStateAsync(
+                            req,
+                            new CancellationSignal(),
+                            Executors.newSingleThreadExecutor(),
+                            new CredentialManagerCallback<>() {
+                                @Override
+                                public void onResult(Void unused) {
+                                    nativeOnCredentialManagerResult(-2,null);
+                                }
+                                @Override
+                                public void onError(@NonNull ClearCredentialException e)
+                                {
+                                    nativeOnCredentialManagerResult(-2,null);
+                                }
+                            });
+                }
+                catch (Exception ex) {
+                    logErrorWithError("Exception during signOut", ex);
+                    nativeOnCredentialManagerResult(-2, null);
+                }
+            }
+        });
     }
 
     public static void disconnect() 
