@@ -71,10 +71,25 @@ public class AppleSignIn
 
     public static void signIn()
     {
-        Log.i(TAG, "signIn");
-        
-        isActive = true;
-        bindCustomTabsService();
+        if (UnityPlayer.currentActivity == null) {
+            Log.e(TAG, "UnityPlayer.currentActivity is null in signIn!");
+            SendResponseFailToUnity("UnityPlayer.currentActivity is null");
+            return;
+        }
+
+        UnityPlayer.currentActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Log.i(TAG, "signIn");
+                    isActive = true;
+                    bindCustomTabsService();
+                } catch (Exception e) {
+                    Log.e(TAG, "signIn exception: " + e.getMessage());
+                    SendResponseFailToUnity("EXCEPTION: " + e.getMessage());
+                }
+            }
+        });
     }
 
     public static void OnSignInResponse( String url )
@@ -175,16 +190,29 @@ public class AppleSignIn
             return;
         isActive = false;
         
-        // return to main application
-        if( UrlScheme != null )
-        {
-            String url  = UrlScheme+"xxx";
-            Intent main = new Intent( Intent.ACTION_VIEW, Uri.parse(url) );
-            UnityPlayer.currentActivity.startActivity( main );
+        if (UnityPlayer.currentActivity == null) {
+            return;
         }
-        
-        // Unbind Service
-        unbindCustomTabsService();
+
+        UnityPlayer.currentActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // return to main application
+                    if( UrlScheme != null )
+                    {
+                        String url  = UrlScheme+"xxx";
+                        Intent main = new Intent( Intent.ACTION_VIEW, Uri.parse(url) );
+                        UnityPlayer.currentActivity.startActivity( main );
+                    }
+                    
+                    // Unbind Service
+                    unbindCustomTabsService();
+                } catch (Exception e) {
+                    Log.e(TAG, "closeDialog exception: " + e.getMessage());
+                }
+            }
+        });
     }
     
     public static final String CUSTOM_TAB_PACKAGE_NAME = "com.android.chrome";
@@ -289,8 +317,15 @@ public class AppleSignIn
             return;
         }
         
-        UnityPlayer.currentActivity.unbindService( customTabsServiceConnection );
+        try {
+            if (UnityPlayer.currentActivity != null) {
+                UnityPlayer.currentActivity.unbindService( customTabsServiceConnection );
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "unbindCustomTabsService exception: " + e.getMessage());
+        }
         customTabsClient  = null;
         customTabsSession = null;
+        customTabsServiceConnection = null;
     }
 }
