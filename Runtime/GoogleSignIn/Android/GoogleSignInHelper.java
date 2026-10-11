@@ -41,6 +41,10 @@ import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.ClearCredentialException;
 import androidx.credentials.exceptions.GetCredentialCancellationException;
 import androidx.credentials.exceptions.GetCredentialException;
+import androidx.credentials.exceptions.GetCredentialInterruptedException;
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException;
+import androidx.credentials.exceptions.GetCredentialUnsupportedException;
+import androidx.credentials.exceptions.NoCredentialException;
 
 /**
  * Helper class used by the native C++ code to interact with Google Sign-in API. The general flow is
@@ -126,8 +130,12 @@ public class GoogleSignInHelper
                     // get the credential manager
                     CredentialManager credentialManager = CredentialManager.create(UnityPlayer.currentActivity);
 
+                    // An explicit (non silent) sign in must use the Sign In With Google form:
+                    // the GoogleId bottom sheet fails immediately with NoCredentialException, without any UI,
+                    // when the device has no Google account or when the user dismissed it recently (cooldown).
+                    // The form does not support silent sign in, so the silent flow keeps the GoogleId option.
                     GetCredentialRequest credentialRequest;
-                    if( _useSignInWithGoogleForm )
+                    if( !silent )
                     {
                         GetSignInWithGoogleOption siwg = new GetSignInWithGoogleOption.Builder(_webClientId).build();
                         // create the credential request
@@ -186,6 +194,12 @@ public class GoogleSignInHelper
                                             nativeOnCredentialManagerResult(8,null);
                                         }
                                     }
+                                    else
+                                    {
+                                        // always answer, otherwise the unity side waits forever
+                                        logError("Unexpected credential class " + credential.getClass().getName());
+                                        sendResult(STATUS_ERROR, null, "Unexpected credential: " + credential.getType());
+                                    }
                                 }
 
                                 @Override
@@ -193,17 +207,27 @@ public class GoogleSignInHelper
                                 {
                                     logErrorWithError("GetCredentialException ", e);
 
-                                    // canceled ou internal error
+                                    // keep the failure reason, every error used to be reported as an internal error
+                                    int status;
                                     if( e instanceof GetCredentialCancellationException )
-                                        nativeOnCredentialManagerResult(2,null);
+                                        status = STATUS_CANCELED;
+                                    else if( e instanceof NoCredentialException )
+                                        status = STATUS_INVALID_ACCOUNT;    // no google account, or the prompt is in cooldown
+                                    else if( e instanceof GetCredentialProviderConfigurationException
+                                          || e instanceof GetCredentialUnsupportedException )
+                                        status = STATUS_API_NOT_CONNECTED;  // google play services missing or outdated
+                                    else if( e instanceof GetCredentialInterruptedException )
+                                        status = STATUS_INTERRUPTED;
                                     else
-                                        nativeOnCredentialManagerResult(8,null);
+                                        status = STATUS_ERROR;
+
+                                    sendResult(status, null, e.getClass().getSimpleName() + " (" + e.getType() + "): " + e.getMessage());
                                 }
                             });
                 }
                 catch (Exception ex) {
                     logErrorWithError("Exception during _signIn", ex);
-                    nativeOnCredentialManagerResult(8, null);
+                    sendResult(STATUS_ERROR, null, "Exception during _signIn: " + ex);
                 }
             }
         });
@@ -212,9 +236,6 @@ public class GoogleSignInHelper
     public static void nativeOnCredentialManagerResult( int result, GoogleIdTokenCredential acct )
     {
         logDebug( "nativeOnResult: " + result );
-
-        JSONObject jsonObject = new JSONObject();
-        JSONObject strStrMap  = new JSONObject();
 
         // map status codes
         if( result == 12501 )      // CANCELLED
@@ -232,17 +253,41 @@ public class GoogleSignInHelper
         else if( result == 4 )     // SIGN IN REQUIRED
             result = 9;
 
+        sendResult( result, acct, null );
+    }
+
+    // GoogleSignInStatusCode values on the unity side
+    private static final int STATUS_API_NOT_CONNECTED = 1;
+    private static final int STATUS_CANCELED          = 2;
+    private static final int STATUS_INTERRUPTED       = 3;
+    private static final int STATUS_INVALID_ACCOUNT   = 4;
+    private static final int STATUS_ERROR             = 9;
+
+    /**
+     * Sends the result to unity. The status is a GoogleSignInStatusCode value and is not remapped.
+     */
+    public static void sendResult( int result, GoogleIdTokenCredential acct, String errorMessage )
+    {
+        logDebug( "sendResult: " + result );
+
+        JSONObject jsonObject = new JSONObject();
+        JSONObject strStrMap  = new JSONObject();
+
         String strResult;
         try
         {
             strStrMap.put("Status", result);
+            if( errorMessage != null )
+                strStrMap.put("ErrorMessage", errorMessage);
 
             if( acct != null )
             {
                 // get the user ID from the ID token
                 String idToken            = acct.getIdToken();
                 String[] segments         = idToken.split("\\.");
-                byte[] payloadAsByteArray = Base64.decode(segments[1], Base64.NO_PADDING);
+                // JWT segments are base64url encoded: without URL_SAFE, a payload containing '-' or '_'
+                // (e.g. non ascii names) throws and the sign in fails after the user picked an account
+                byte[] payloadAsByteArray = Base64.decode(segments[1], Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
                 JSONObject payloadInJson  = new JSONObject(new String(payloadAsByteArray, StandardCharsets.UTF_8));
                 String uniqueIdentifier   = (String)payloadInJson.get("sub");
 
@@ -265,7 +310,8 @@ public class GoogleSignInHelper
         }
         catch( Exception e )
         {
-            strResult = "{\"result\":{\"Status\":9, \"ErrorMessage\":\"JSON OBJECT EXCEPTION\"}}";
+            logErrorWithError("Failed to build the sign in result", e);
+            strResult = "{\"result\":{\"Status\":9, \"ErrorMessage\":" + JSONObject.quote("JSON OBJECT EXCEPTION: " + e) + "}}";
         }
 
         logDebug( " > json: " + strResult );
@@ -273,7 +319,7 @@ public class GoogleSignInHelper
         UnityPlayer.UnitySendMessage("GoogleSignInHelperObject", "OnSignInResult", strResult);
     }
 
-    public static void signOut() 
+    public static void signOut()
     {
         if (UnityPlayer.currentActivity == null) {
             logError("UnityPlayer.currentActivity is null in signOut!");

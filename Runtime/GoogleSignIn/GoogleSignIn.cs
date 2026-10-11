@@ -20,6 +20,7 @@ namespace com.binouze
         /// <summary>
         /// set it to true to show the SignInWithGoogle Form instead of the GoogleId Credential SignIn Card.
         /// Note that SignInWithGoogle Form does not supports silent sign-in.
+        /// On Android the explicit (non silent) sign-in always uses the form, so this flag no longer changes anything there.
         /// </summary>
         public static bool UseGoogleSignInFormOnAndroid = false;
         

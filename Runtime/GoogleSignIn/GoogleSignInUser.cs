@@ -34,6 +34,10 @@ namespace com.binouze
         /// <summary> User ID</summary>
         public string UserId { get; internal set; }
 
+        /// <summary> Native failure reason (exception type and message)</summary>
+        /// <remarks> null on success.</remarks>
+        public string ErrorMessage { get; internal set; }
+
 
         public GoogleSignInStatusCode Status;
 
@@ -52,13 +56,14 @@ namespace com.binouze
                 GivenName   = obj.GetString( "GivenName" ),
                 PhotoUrl    = obj.GetString( "PhotoUrl" ),
                 UserId      = obj.GetString( "UserId" ),
+                ErrorMessage = obj.GetString( "ErrorMessage" ),
                 Status      = (GoogleSignInStatusCode)obj.GetInt( "Status" ),
             };
         }
 
         public override string ToString()
         {
-            return $"{nameof( Status )}: {Status}, {nameof( AuthCode )}: {AuthCode}, {nameof( Email )}: {Email}, {nameof( IdToken )}: {IdToken}, {nameof( DisplayName )}: {DisplayName}, {nameof( GivenName )}: {GivenName}, {nameof( FamilyName )}: {FamilyName}, {nameof( PhotoUrl )}: {PhotoUrl}, {nameof( UserId )}: {UserId}";
+            return $"{nameof( Status )}: {Status}, {nameof( AuthCode )}: {AuthCode}, {nameof( Email )}: {Email}, {nameof( IdToken )}: {IdToken}, {nameof( DisplayName )}: {DisplayName}, {nameof( GivenName )}: {GivenName}, {nameof( FamilyName )}: {FamilyName}, {nameof( PhotoUrl )}: {PhotoUrl}, {nameof( UserId )}: {UserId}, {nameof( ErrorMessage )}: {ErrorMessage}";
         }
     }
 }
