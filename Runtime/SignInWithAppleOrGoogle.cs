@@ -54,6 +54,15 @@ namespace com.binouze
             SignInWithGoogle.SignOut( OnComplete );
         }
 
+        /// <summary>
+        /// Forget the Google user cached by the plugin without signing out from the credential providers,
+        /// so the next sign in asks Google again while automatic sign-in stays enabled
+        /// </summary>
+        public static void Google_ResetState()
+        {
+            SignInWithGoogle.ResetStatics();
+        }
+
         /*
         /// <summary>
         /// Disconnect from Google
