@@ -82,23 +82,30 @@ namespace com.binouze
         public static bool Apple_Supported => SignInWithApple.IsSupported;
         
         /// <summary>
-        /// Launch Apple sign in process
+        /// Launch Apple sign in process.
+        /// OnComplete is called exactly once, user is never null, isConnected is true only when
+        /// user.Status is Success and user.IdToken is not empty.
         /// </summary>
         /// <param name="OnComplete"></param>
-        /// <param name="AppleID"></param>
+        /// <param name="AppleID">ignored, kept for source compatibility</param>
         public static void Apple_SignIn( Action<bool, AppleSignInUser> OnComplete, string AppleID = null )
         {
-            SignInWithApple.Connect( () =>
+            SignInWithApple.Connect( user =>
             {
-                var user = new AppleSignInUser
-                {
-                    Email     = SignInWithApple.AppleIDEmail,
-                    FirstName = SignInWithApple.AppleIDFName,
-                    LastName  = SignInWithApple.AppleIDLName,
-                    UserId    = SignInWithApple.AppleID
-                };
-                OnComplete?.Invoke( SignInWithApple.IsConnected, user );
-            }, AppleID );
+                var ok = user.Status == AppleSignInStatusCode.Success && !string.IsNullOrEmpty( user.IdToken );
+                OnComplete?.Invoke( ok, user );
+            } );
+        }
+
+        /// <summary>
+        /// Get the credential state of an Apple user (iOS only, other platforms return Unknown).
+        /// OnComplete is called exactly once on the main thread.
+        /// </summary>
+        /// <param name="userId"></param>
+        /// <param name="OnComplete"></param>
+        public static void Apple_GetCredentialState( string userId, Action<AppleCredentialState> OnComplete )
+        {
+            SignInWithApple.GetCredentialState( userId, OnComplete );
         }
 
         /// <summary>

@@ -14,14 +14,19 @@ namespace com.binouze
             Debug.Log("AdsPrebuildScript.OnPreprocessBuild for target " + report.summary.platform + " at path " + report.summary.outputPath);
             // creer les settings
             var settings = SignInWithAppleOrGoogleSettingsEditor.LoadSettingsInstance();
-            if( settings == null || !settings.IsValide() )
+            if( settings == null )
+            {
+                Debug.LogWarning( "settings not found please check LagoonPlugins/SignInWithAppleOrGoogle Settings" );
+                return;
+            }
+            if( !settings.IsValide() )
             {
                 Debug.LogWarning( "settings not valid please check LagoonPlugins/SignInWithAppleOrGoogle Settings" );
             }
             
             // -- Add the SignInWithGoogle iOS URL Scheme in the settings if needed
 
-            if( !string.IsNullOrWhiteSpace( settings.APP_URL_SCHEME ) )
+            if( !string.IsNullOrWhiteSpace( settings.Google_IosClientScheme ) )
             {
                 var schemesOK     = false;
                 var actualSchemes = PlayerSettings.iOS.iOSUrlSchemes;

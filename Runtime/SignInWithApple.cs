@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using AppleAuth;
 using UnityEngine;
 #if UNITY_IOS
@@ -20,28 +21,23 @@ namespace com.binouze
         internal static bool IsSupported => false;
         #endif
         
-        internal static  string           AppleID;
-        internal static  string           AppleIDEmail;
-        internal static  string           AppleIDFName;
-        internal static  string           AppleIDLName;
-        internal static bool              IsConnected { get; private set; }
         private         bool              MustUpdate;
         private         IAppleAuthManager appleAuthManager;
 
         private bool IsInit;
-        
+
         private static void Log( string str )
         {
             PluginLogger.Log( $"[Apple] {str}" );
         }
-        
+
         private void Init()
         {
             if( IsInit )
                 return;
             IsInit = true;
-            
-            
+
+
             #if UNITY_IOS
             // If the current platform is supported
             if( IsSupported && !Application.isEditor )
@@ -51,7 +47,7 @@ namespace com.binouze
                 // Creates an Apple Authentication manager with the deserializer
                 appleAuthManager = new AppleAuthManager(deserializer);
                 MustUpdate       = true;
-                
+
                 appleAuthManager.SetCredentialsRevokedCallback(result =>
                 {
                     // deco -> reset game
@@ -65,7 +61,7 @@ namespace com.binouze
                 Debug.LogException( new Exception("[SignInWithAppleOrGoogle] APPLE Fail to load settings file") );
                 return;
             }
-            
+
             AppleSignIn.GetInstance().Init( settings.URL_APPLECONNECT_REDIRECT );
             #endif
         }
@@ -76,14 +72,8 @@ namespace com.binouze
             AppleSignIn.ResetStatics();
             AppleSignIn.GetInstance().CloseDialog();
             #endif
-
-            AppleID      = null;
-            AppleIDEmail = null;
-            AppleIDFName = null;
-            AppleIDLName = null;
-            IsConnected  = false;
         }
-        
+
         #if UNITY_IOS
         private void Update()
         {
@@ -96,42 +86,44 @@ namespace com.binouze
         }
         #endif
 
-        internal static void Connect( Action OnComplete, string appleID = null )
+        private static AppleSignInUser NewUser( AppleSignInStatusCode status, string errorMessage = null )
         {
-            GetInstance()._Connect( OnComplete, appleID );
+            return new AppleSignInUser { Status = status, ErrorMessage = errorMessage };
+        }
+
+        internal static void Connect( Action<AppleSignInUser> OnComplete )
+        {
+            GetInstance()._Connect( OnComplete );
         }
         internal static void Disconnect( Action OnComplete )
         {
             GetInstance()._Disconnect( OnComplete );
         }
 
+        internal static void GetCredentialState( string userId, Action<AppleCredentialState> OnComplete )
+        {
+            GetInstance()._GetCredentialState( userId, OnComplete );
+        }
+
         private void _Disconnect( Action OnComplete )
         {
             OnComplete?.Invoke();
         }
-        
-        // Temporary mapping of the new AppleSignInUser onto the legacy static fields (reworked in a later task)
-        private static void ApplyUser( AppleSignInUser user )
-        {
-            var ok = user != null && user.Status == AppleSignInStatusCode.Success && !string.IsNullOrEmpty( user.UserId );
-            var uid = ok ? user.UserId : null;
-            Log( $"ConnectComplete {uid}, {user?.Email}, {user?.FirstName}, {user?.LastName}" );
-
-            IsConnected  = ok;
-            AppleID      = uid;
-            AppleIDEmail = ok ? user.Email : null;
-            AppleIDFName = ok ? user.FirstName : null;
-            AppleIDLName = ok ? user.LastName : null;
-        }
 
         /// <summary>
-        /// Lancer la connection a Apple ID
+        /// Lancer la connection a Apple ID, OnComplete est appele une seule fois avec un user non null
         /// </summary>
         /// <param name="OnComplete"></param>
-        /// <param name="appleID"></param>
-        private void _Connect( Action OnComplete, string appleID = null )
+        private void _Connect( Action<AppleSignInUser> OnComplete )
         {
-            Log( $"Connect {appleID}" );
+            Log( "Connect" );
+
+            void Complete( AppleSignInUser user )
+            {
+                user ??= NewUser( AppleSignInStatusCode.Error, "no result" );
+                Log( $"ConnectComplete {user}" );
+                OnComplete?.Invoke( user );
+            }
 
             if( Application.isEditor )
             {
@@ -139,98 +131,64 @@ namespace com.binouze
                     fuid =>
                     {
                         AppleSignIn.FAKE_UID = fuid;
-                        AppleSignIn.GetInstance().SignIn( user =>
-                        {
-                            ApplyUser( user );
-                    
-                            ConnectComplete( OnComplete );
-                        });
+                        AppleSignIn.GetInstance().SignIn( Complete );
                     },
                     () =>
                     {
-                        OnComplete?.Invoke();
+                        Complete( NewUser( AppleSignInStatusCode.Canceled ) );
                     } );
                 return;
             }
 
             #if UNITY_ANDROID
-            if( !string.IsNullOrWhiteSpace(appleID) )
-            {
-                IsConnected   = true;
-                AppleID       = appleID;
-                AppleIDEmail  = null;
-                AppleIDFName  = null;
-                AppleIDLName  = null;
-                ConnectComplete( OnComplete );
-            }
-            else
-            {
-                AppleSignIn.GetInstance().SignIn( user =>
-                {
-                    ApplyUser( user );
-                    
-                    ConnectComplete( OnComplete );
-                });
-            }
+            AppleSignIn.GetInstance().SignIn( Complete );
             #elif UNITY_IOS
-            if( !IsSupported )
+            if( !IsSupported || appleAuthManager == null )
             {
                 Log( "Connect IOS => NOT SUPPORTED" );
-                OnComplete?.Invoke();
+                Complete( NewUser( AppleSignInStatusCode.NotSupported ) );
                 return;
             }
-            
-            var instance = GetInstance();
-            if( !string.IsNullOrWhiteSpace(appleID) )
-            {
-                Log( $"Connect => CheckCredentials {appleID}" );
-                instance.CheckCredentials( appleID, OnComplete );
-            }
-            else
-            {
-                Log( "Connect => QuickLogin" );
-                instance.QuickLogin( OnComplete );
-            }
+
+            DoConnect( Complete );
             #else
             Log( "Connect PLATEFORM NOT SUPPORTED" );
-            OnComplete?.Invoke();
+            Complete( NewUser( AppleSignInStatusCode.NotSupported ) );
             #endif
         }
-        
-        #if UNITY_IOS
-        private void CheckCredentials( string userId, Action OnComplete )
+
+        private void _GetCredentialState( string userId, Action<AppleCredentialState> OnComplete )
         {
-            appleAuthManager.GetCredentialState(
-                userId,
-                state =>
-                {
-                    if( state == CredentialState.Authorized )
+            #if UNITY_IOS
+            if( !Application.isEditor && IsSupported && appleAuthManager != null && !string.IsNullOrEmpty( userId ) )
+            {
+                appleAuthManager.GetCredentialState(
+                    userId,
+                    state =>
                     {
-                        AppleID     = userId;
-                        IsConnected = true;
-                        
-                        Log( $"CheckCredentials OK {AppleID}" );
-                        OnComplete?.Invoke();
-                    }
-                    else
+                        Log( $"GetCredentialState {state}" );
+                        switch( state )
+                        {
+                            case CredentialState.Authorized: OnComplete?.Invoke( AppleCredentialState.Authorized ); break;
+                            case CredentialState.Revoked:    OnComplete?.Invoke( AppleCredentialState.Revoked );    break;
+                            case CredentialState.NotFound:   OnComplete?.Invoke( AppleCredentialState.NotFound );   break;
+                            default:                         OnComplete?.Invoke( AppleCredentialState.Unknown );    break;
+                        }
+                    },
+                    error =>
                     {
-                        Log( $"CheckCredentials FAIL {state}" );
-                        QuickLogin( OnComplete );
-                    }
-                },
-                error =>
-                {
-                    Log( $"CheckCredentials ERROR {error.LocalizedDescription}" );
-                    QuickLogin( OnComplete );
-                });
+                        Log( $"GetCredentialState ERROR {error?.LocalizedDescription}" );
+                        OnComplete?.Invoke( AppleCredentialState.Unknown );
+                    });
+                return;
+            }
+            #endif
+
+            OnComplete?.Invoke( AppleCredentialState.Unknown );
         }
 
-        private void QuickLogin( Action OnComplete )
-        {
-            DoConnect( OnComplete );
-        }
-        
-        private void DoConnect( Action OnComplete )
+        #if UNITY_IOS
+        private void DoConnect( Action<AppleSignInUser> OnComplete )
         {
             var loginArgs = new AppleAuthLoginArgs(LoginOptions.IncludeEmail | LoginOptions.IncludeFullName);
             appleAuthManager.LoginWithAppleId(
@@ -240,45 +198,39 @@ namespace com.binouze
                     // Obtained credential, cast it to IAppleIDCredential
                     if( credential is IAppleIDCredential appleIdCredential )
                     {
-                        AppleID       = appleIdCredential.User;
-                        AppleIDEmail  = appleIdCredential.Email;
-                        AppleIDFName  = appleIdCredential.FullName?.GivenName ?? "";
-                        AppleIDLName  = appleIdCredential.FullName?.FamilyName ?? "";
-
-                        IsConnected  = true;
-                        
-                        Log( $"DoConnect OK {AppleID}" );
-                        ConnectComplete( OnComplete );
+                        var user = new AppleSignInUser
+                        {
+                            Status            = AppleSignInStatusCode.Success,
+                            UserId            = appleIdCredential.User,
+                            Email             = appleIdCredential.Email,
+                            FirstName         = appleIdCredential.FullName?.GivenName ?? "",
+                            LastName          = appleIdCredential.FullName?.FamilyName ?? "",
+                            IdToken           = appleIdCredential.IdentityToken      != null ? Encoding.UTF8.GetString( appleIdCredential.IdentityToken )      : null,
+                            AuthorizationCode = appleIdCredential.AuthorizationCode != null ? Encoding.UTF8.GetString( appleIdCredential.AuthorizationCode ) : null,
+                        };
+                        Log( $"DoConnect OK {user.UserId}" );
+                        OnComplete( user );
                     }
                     else
                     {
-                        Log( $"[ConnectWithApple] DoConnect FAIL {credential}" );
+                        Log( $"DoConnect FAIL {credential}" );
+                        OnComplete( NewUser( AppleSignInStatusCode.Error, "unexpected credential type" ) );
                     }
                 },
                 error =>
                 {
-                    Log( $"[ConnectWithApple] DoConnect ERROR {error?.LocalizedDescription ?? "NO ERROR DESC"}");
-                    
-                    // Something went wrong
-                    var authorizationErrorCode = error.GetAuthorizationErrorCode();
-                    Log( $"ConnectWithApple ERROR: {authorizationErrorCode}" );
-                    IsConnected = false;
-                    AppleID     = null;
-                    ConnectComplete( OnComplete );
+                    Log( $"DoConnect ERROR {error?.LocalizedDescription ?? "NO ERROR DESC"}" );
+
+                    var code = error != null ? error.GetAuthorizationErrorCode() : AuthorizationErrorCode.Unknown;
+                    Log( $"DoConnect ERROR code: {code}" );
+                    if( code == AuthorizationErrorCode.Canceled )
+                        OnComplete( NewUser( AppleSignInStatusCode.Canceled ) );
+                    else
+                        OnComplete( NewUser( AppleSignInStatusCode.Error, error?.LocalizedDescription ?? code.ToString() ) );
                 });
         }
         #endif
 
-        /// <summary>
-        /// La connection à apple ID est terminée
-        /// </summary>
-        /// <param name="OnComplete"></param>
-        private static void ConnectComplete( Action OnComplete )
-        {
-            Log( $"ConnectComplete {IsConnected} {AppleID}" );
-            OnComplete.Invoke();
-        }
-        
         private void OnDestroy()
         {
             _instance = null;
