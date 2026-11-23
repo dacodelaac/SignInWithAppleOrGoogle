@@ -1,44 +1,57 @@
 package com.binouze;
 
-//import androidx.appcompat.app.AppCompatActivity;
 import android.app.Activity;
 import android.content.Intent;
-import android.util.Log;
 import android.os.Bundle;
-import android.os.Handler;
-import java.lang.Runnable;
-import com.unity3d.player.UnityPlayer;
+import android.util.Log;
 
 public class AppleSignInActivity extends Activity
 {
     private static final String TAG = "AppleSignInActivity";
 
     @Override
-    protected void onCreate( Bundle savedInstanceState ) 
+    protected void onCreate( Bundle savedInstanceState )
     {
         super.onCreate( savedInstanceState );
-        
-        Intent intent = getIntent();
-        Log.d( TAG, "onCreate " + intent.getAction() + " " + intent.getDataString() );
-        
-        HandleLink( intent );
+        HandleLink( getIntent() );
     }
 
     @Override
-    protected void onNewIntent( Intent intent ) 
+    protected void onNewIntent( Intent intent )
     {
         super.onNewIntent( intent );
-        Log.d( TAG, "onNewIntent " + intent.getAction() + " " + intent.getDataString() );
-        
+        setIntent( intent );
         HandleLink( intent );
     }
-    
-    private void HandleLink(Intent intent)
+
+    private void HandleLink( Intent intent )
     {
-        AppleSignIn.OnSignInResponse( intent.getDataString() );
-        
-        // return to main application
-        Intent main = new Intent( this, UnityPlayer.currentActivity.getClass() );
-        startActivity( main );
+        try
+        {
+            String url = intent == null ? null : intent.getDataString();
+            Log.d( TAG, "HandleLink " + url );
+            AppleSignIn.OnSignInResponse( url );
+        }
+        catch( Exception e )
+        {
+            Log.e( TAG, "HandleLink exception: " + e.getMessage() );
+        }
+
+        // bring the game task back to the front
+        try
+        {
+            Intent main = getPackageManager().getLaunchIntentForPackage( getPackageName() );
+            if( main != null )
+            {
+                main.addFlags( Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP );
+                startActivity( main );
+            }
+        }
+        catch( Exception e )
+        {
+            Log.e( TAG, "return to app exception: " + e.getMessage() );
+        }
+
+        finish();
     }
 }

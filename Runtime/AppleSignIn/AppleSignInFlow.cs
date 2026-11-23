@@ -15,8 +15,7 @@ namespace com.binouze
 
         public string Begin( Action<AppleSignInUser> onComplete )
         {
-            if( IsPending )
-                Fail( "superseded by a new request" );
+            var previous = _onComplete;
 
             var bytes = new byte[16];
             using( var rng = RandomNumberGenerator.Create() )
@@ -26,9 +25,14 @@ namespace com.binouze
             foreach( var b in bytes )
                 sb.Append( b.ToString( "x2" ) );
 
-            _state      = sb.ToString();
+            // Install the new request before notifying the old one, so a re-entrant Begin
+            // from the old callback supersedes this request instead of being overwritten by it.
+            var state   = sb.ToString();
+            _state      = state;
             _onComplete = onComplete;
-            return _state;
+
+            previous?.Invoke( new AppleSignInUser { Status = AppleSignInStatusCode.Error, ErrorMessage = "superseded by a new request" } );
+            return state;
         }
 
         public void HandleResponse( string json )
@@ -43,7 +47,16 @@ namespace com.binouze
                 return;
             }
 
-            if( dict.GetString( "state" ) != _state )
+            var respState = dict.GetString( "state" );
+
+            // Java cannot always know the state when it fails; keep its message.
+            if( string.IsNullOrEmpty( respState ) && dict.GetString( "result" ) == "error" )
+            {
+                Fail( dict.GetString( "message", "unknown error" ) );
+                return;
+            }
+
+            if( respState != _state )
             {
                 Fail( "state mismatch" );
                 return;

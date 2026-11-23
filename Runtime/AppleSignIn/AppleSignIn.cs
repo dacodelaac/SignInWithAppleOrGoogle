@@ -1,23 +1,28 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
+using System.Text;
 using UnityEngine;
 
 namespace com.binouze
 {
     public class AppleSignIn : MonoBehaviour
     {
-        #if UNITY_EDITOR
-        private static string SUCCESS_RESPONSE => "{\"payload\":{\"sub\":\""+FAKE_UID+"\"}},\"user\":{\"email\":\"fake_user@gmail.com\",\"name\":{\"lastName\":\"FAKE\",\"firstName\":\"User\"}}";
-        #endif
-        
         public static string FAKE_UID;
         public static string CLIENT_ID;
         public static string SCOPE;
 
-        private static Action<string,string,string,string> OnComplete;
+        // time to let the redirect deep link arrive after the player comes back to the game
+        private const float RETURN_GRACE_SECONDS = 1.5f;
+
+        private static AppleSignInFlow _flow = new AppleSignInFlow();
 
         private bool IsInit;
+
+        // focus based cancel (browser closed without finishing)
+        private bool _leftApp;
+        private int  _requestId;
 
         private static void Log( string val )
         {
@@ -27,79 +32,139 @@ namespace com.binouze
         {
             PluginLogger.LogError( $"[AppleSignIn] {val}" );
         }
-        
+
+        /// <summary>Drops the pending request without calling its callback.</summary>
         public static void ResetStatics()
         {
-            OnComplete = null;
+            _flow = new AppleSignInFlow();
         }
-        
+
         public void Init( string redirectURI )
         {
             if( IsInit )
                 return;
 
-            #if UNITY_ANDROID
+            #if UNITY_ANDROID && !UNITY_EDITOR
             using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
             cls.CallStatic("init", CLIENT_ID, redirectURI, SCOPE, URL_SCHEME);
             #endif
 
             IsInit = true;
         }
-        
-        public void SignIn( Action<string,string,string,string> OnCompleteSignin )
+
+        public void SignIn( Action<AppleSignInUser> onComplete )
         {
             if( !IsInit )
             {
-                OnCompleteSignin?.Invoke( null,null,null,null );
+                // callback exactly once even when not initialized
+                var tmp = new AppleSignInFlow();
+                tmp.Begin( onComplete );
+                tmp.Fail( "not initialized" );
                 return;
             }
-            
-            OnComplete = OnCompleteSignin;
-            
+
+            var state = _flow.Begin( onComplete );
+            _requestId++;
+            _leftApp = false;
+
             #if UNITY_EDITOR
-            OnAppleSignInResponse( SUCCESS_RESPONSE );
+            _flow.HandleResponse( BuildEditorResponse( state ) );
             #elif UNITY_ANDROID
-            using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
-            cls.CallStatic("signIn");
-            #elif UNITY_IOS
-            //GoogleSignIn_Disconnect();
+            try
+            {
+                using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
+                cls.CallStatic("signIn", state);
+            }
+            catch( Exception e )
+            {
+                LogError( $"signIn exception {e.Message}" );
+                _flow.Fail( e.Message );
+            }
+            #else
+            _flow.Fail( "not supported" );
             #endif
         }
-        
+
         public void CloseDialog()
         {
-            #if UNITY_ANDROID
-            using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
-            cls.CallStatic("closeDialog");
-            #elif UNITY_IOS
-            //GoogleSignIn_CloseDialog();
+            CancelPending( "closed" );
+        }
+
+        private void CancelPending( string reason )
+        {
+            #if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
+                cls.CallStatic("cancel");
+            }
+            catch( Exception e )
+            {
+                LogError( $"cancel exception {e.Message}" );
+            }
             #endif
+            _flow.Cancel( reason );
         }
 
         public void OnAppleSignInResponse( string response )
         {
             Log( $"OnAppleSignInResponse {response}" );
-
-            string uid       = null;
-            string email     = null;
-            string firstName = null;
-            string lastName  = null;
-            var    obj       = Json.Deserialize( response );
-            if( obj is Dictionary<string,object> dic )
-            {
-                uid       = dic.GetStringS( null, "payload", "sub" );
-                firstName = dic.GetStringS( null, "user",    "name", "firstName" );
-                lastName  = dic.GetStringS( null, "user",    "name", "lastName" );
-                email     = dic.GetStringS( null, "user",    "email" );
-            }
-            else
-            {
-                LogError( "[AppleSignIn] OnAppleSignInResponse INVALID OBJECT" );
-            }
-            
-            OnComplete?.Invoke( uid, email, firstName, lastName );
+            _flow.HandleResponse( response );
         }
-        
+
+        #if UNITY_EDITOR
+        private static string BuildEditorResponse( string state )
+        {
+            var payload = Json.Serialize( new Dictionary<string,object> { { "sub", FAKE_UID ?? "fake" } } );
+            var b64     = Convert.ToBase64String( Encoding.UTF8.GetBytes( payload ) ).TrimEnd( '=' ).Replace( '+', '-' ).Replace( '/', '_' );
+            var user    = Json.Serialize( new Dictionary<string,object>
+            {
+                { "email", "fake_user@gmail.com" },
+                { "name",  new Dictionary<string,object> { { "firstName", "User" }, { "lastName", "FAKE" } } },
+            } );
+            return Json.Serialize( new Dictionary<string,object>
+            {
+                { "result",   "success" },
+                { "state",    state },
+                { "id_token", "h." + b64 + ".s" },
+                { "code",     "editor" },
+                { "user",     user },
+            } );
+        }
+        #endif
+
+        #if UNITY_ANDROID && !UNITY_EDITOR
+        private void OnApplicationFocus( bool hasFocus )
+        {
+            if( !_flow.IsPending )
+            {
+                _leftApp = false;
+                return;
+            }
+
+            if( !hasFocus )
+            {
+                _leftApp = true;
+                return;
+            }
+
+            if( _leftApp )
+            {
+                _leftApp = false;
+                StartCoroutine( CancelIfStillPending( _requestId ) );
+            }
+        }
+
+        private IEnumerator CancelIfStillPending( int requestId )
+        {
+            yield return new WaitForSecondsRealtime( RETURN_GRACE_SECONDS );
+
+            // a newer request may have started meanwhile
+            if( requestId == _requestId && _flow.IsPending )
+                CancelPending( "closed" );
+        }
+        #endif
+
         private static string      URL_SCHEME;
         private static AppleSignIn _instance;
         public static AppleSignIn GetInstance() 

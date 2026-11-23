@@ -110,6 +110,20 @@ namespace com.binouze
             OnComplete?.Invoke();
         }
         
+        // Temporary mapping of the new AppleSignInUser onto the legacy static fields (reworked in a later task)
+        private static void ApplyUser( AppleSignInUser user )
+        {
+            var ok = user != null && user.Status == AppleSignInStatusCode.Success && !string.IsNullOrEmpty( user.UserId );
+            var uid = ok ? user.UserId : null;
+            Log( $"ConnectComplete {uid}, {user?.Email}, {user?.FirstName}, {user?.LastName}" );
+
+            IsConnected  = ok;
+            AppleID      = uid;
+            AppleIDEmail = ok ? user.Email : null;
+            AppleIDFName = ok ? user.FirstName : null;
+            AppleIDLName = ok ? user.LastName : null;
+        }
+
         /// <summary>
         /// Lancer la connection a Apple ID
         /// </summary>
@@ -125,15 +139,9 @@ namespace com.binouze
                     fuid =>
                     {
                         AppleSignIn.FAKE_UID = fuid;
-                        AppleSignIn.GetInstance().SignIn( (uid, email, firstname, lastname) =>
+                        AppleSignIn.GetInstance().SignIn( user =>
                         {
-                            Log( $"ConnectComplete {uid}, {email}, {firstname}, {lastname}" );
-                    
-                            IsConnected  = uid != null;
-                            AppleID      = uid;
-                            AppleIDEmail = email;
-                            AppleIDFName = firstname;
-                            AppleIDLName = lastname;
+                            ApplyUser( user );
                     
                             ConnectComplete( OnComplete );
                         });
@@ -157,15 +165,9 @@ namespace com.binouze
             }
             else
             {
-                AppleSignIn.GetInstance().SignIn( (uid, email, firstname, lastname) =>
+                AppleSignIn.GetInstance().SignIn( user =>
                 {
-                    Log( $"ConnectComplete {uid}, {email}, {firstname}, {lastname}" );
-                    
-                    IsConnected  = uid != null;
-                    AppleID      = uid;
-                    AppleIDEmail = email;
-                    AppleIDFName = firstname;
-                    AppleIDLName = lastname;
+                    ApplyUser( user );
                     
                     ConnectComplete( OnComplete );
                 });
