@@ -89,7 +89,7 @@ public class AppleSignIn
                     }
                     else
                     {
-                        bindCustomTabsService( activity, pkg, url );
+                        bindCustomTabsService( activity, pkg, url, state );
                     }
                 }
                 catch( Exception e )
@@ -127,22 +127,22 @@ public class AppleSignIn
             if( error != null && !error.isEmpty() )
             {
                 if( error.equals( "user_cancelled_authorize" ) )
-                    Send( new JSONObject().put( "result", "canceled" ).put( "state", stateOf( uri ) ).toString() );
+                    Send( stateOf( uri ), new JSONObject().put( "result", "canceled" ).put( "state", stateOf( uri ) ).toString() );
                 else
-                    Send( new JSONObject().put( "result", "error" ).put( "state", stateOf( uri ) ).put( "message", error ).toString() );
+                    Send( stateOf( uri ), new JSONObject().put( "result", "error" ).put( "state", stateOf( uri ) ).put( "message", error ).toString() );
                 return;
             }
 
             String idToken = uri.getQueryParameter( "id_token" );
             if( idToken == null || idToken.isEmpty() )
             {
-                Send( new JSONObject().put( "result", "error" ).put( "state", stateOf( uri ) ).put( "message", "id_token not found" ).toString() );
+                Send( stateOf( uri ), new JSONObject().put( "result", "error" ).put( "state", stateOf( uri ) ).put( "message", "id_token not found" ).toString() );
                 return;
             }
 
             String code = uri.getQueryParameter( "code" );
             String user = uri.getQueryParameter( "user" );
-            Send( new JSONObject()
+            Send( stateOf( uri ), new JSONObject()
                     .put( "result",   "success" )
                     .put( "state",    stateOf( uri ) )
                     .put( "id_token", idToken )
@@ -163,16 +163,23 @@ public class AppleSignIn
         return s == null ? "" : s;
     }
 
+    // error for the current request
     private static void SendError( String message )
+    {
+        String st;
+        synchronized( LOCK ) { st = currentState; }
+        SendError( st, message );
+    }
+
+    // error for the request identified by state (null: current request, stateless)
+    private static void SendError( String state, String message )
     {
         try
         {
             JSONObject o = new JSONObject().put( "result", "error" ).put( "message", message == null ? "" : message );
-            String st;
-            synchronized( LOCK ) { st = currentState; }
-            if( st != null )
-                o.put( "state", st );
-            Send( o.toString() );
+            if( state != null )
+                o.put( "state", state );
+            Send( state, o.toString() );
         }
         catch( Exception e )
         {
@@ -181,12 +188,19 @@ public class AppleSignIn
     }
 
     // sends at most one response per signIn
-    private static void Send( String json )
+    // a response carrying a state that is not the current one is stale and dropped;
+    // an empty/null state (redirect without state) is delivered to the current request
+    private static void Send( String state, String json )
     {
         synchronized( LOCK )
         {
             if( !isActive )
                 return;
+            if( state != null && !state.isEmpty() && !state.equals( currentState ) )
+            {
+                Log.w( TAG, "dropping stale response" );
+                return;
+            }
             isActive     = false;
             currentState = null;
         }
@@ -241,7 +255,7 @@ public class AppleSignIn
     private static CustomTabsServiceConnection customTabsServiceConnection;
     private static Activity                    boundActivity;
 
-    private static void bindCustomTabsService( final Activity activity, final String pkg, final String url )
+    private static void bindCustomTabsService( final Activity activity, final String pkg, final String url, final String state )
     {
         customTabsServiceConnection = new CustomTabsServiceConnection()
         {
@@ -250,7 +264,7 @@ public class AppleSignIn
             {
                 customTabsClient = client;
                 try { client.warmup( 0 ); } catch( Exception ignored ) { }
-                show( activity, pkg, url );
+                show( activity, pkg, url, state );
             }
 
             @Override
@@ -278,7 +292,7 @@ public class AppleSignIn
         else
         {
             customTabsServiceConnection = null;
-            show( activity, pkg, url );
+            show( activity, pkg, url, state );
         }
     }
 
@@ -295,14 +309,12 @@ public class AppleSignIn
         return customTabsSession;
     }
 
-    private static void show( Activity activity, String pkg, String url )
+    private static void show( Activity activity, String pkg, String url, String state )
     {
         // cancelled or answered while the service was connecting
-        synchronized( LOCK )
-        {
-            if( !isActive )
-                return;
-        }
+        // the request this URL belongs to must still be the current one
+        if( !isCurrent( state ) )
+            return;
 
         try
         {
@@ -316,7 +328,7 @@ public class AppleSignIn
         catch( Exception e )
         {
             Log.e( TAG, "show exception: " + e.getMessage() );
-            SendError( "CANNOT LAUNCH CUSTOMTAB: " + e.getMessage() );
+            SendError( state, "CANNOT LAUNCH CUSTOMTAB: " + e.getMessage() );
         }
     }
 
