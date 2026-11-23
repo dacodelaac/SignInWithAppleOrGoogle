@@ -26,8 +26,43 @@ Sign in with Apple on iOS uses: https://github.com/lupidan/apple-signin-unity
 ### iOS
 
 1. In your Apple Developer account enable the **Sign in with Apple** capability for your App ID.
-2. Nothing else to do in Unity: at build time the plugin's iOS post-process adds the **Sign in with Apple** capability to the Xcode project
-   (`ProjectCapabilityManager.AddSignInWithAppleWithCompatibility(unityFrameworkTargetGuid)` from `AppleAuth.Editor`).
+2. The plugin does not add the capability for you: the host project must add it, either manually in Xcode
+   (Signing & Capabilities > + Capability > Sign in with Apple) or with its own `[PostProcessBuild]` editor script
+   calling `ProjectCapabilityManager.AddSignInWithAppleWithCompatibility(unityFrameworkTargetGuid)` from `AppleAuth.Editor`:
+
+```csharp
+#if UNITY_IOS
+using System.IO;
+using AppleAuth.Editor;
+using UnityEditor;
+using UnityEditor.Callbacks;
+using UnityEditor.iOS.Xcode;
+
+public static class AppleSignInPostProcess
+{
+    [PostProcessBuild(int.MaxValue)]
+    public static void OnPostProcessBuild( BuildTarget target, string path )
+    {
+        if( target != BuildTarget.iOS )
+            return;
+
+        var projPath = PBXProject.GetPBXProjectPath( path );
+        var proj     = new PBXProject();
+        proj.ReadFromString( File.ReadAllText( projPath ) );
+
+        var mainTargetGuid = proj.GetUnityMainTargetGuid();
+        // reuse the entitlements file of the main target if there is one
+        var entitlements = proj.GetBuildPropertyForAnyConfig( mainTargetGuid, "CODE_SIGN_ENTITLEMENTS" );
+        if( string.IsNullOrEmpty( entitlements ) )
+            entitlements = "Unity-iPhone.entitlements";
+
+        var manager = new ProjectCapabilityManager( projPath, entitlements, null, mainTargetGuid );
+        manager.AddSignInWithAppleWithCompatibility( proj.GetUnityFrameworkTargetGuid() );
+        manager.WriteToFile();
+    }
+}
+#endif
+```
 3. The native part uses https://github.com/lupidan/apple-signin-unity.
 
 ### Android
