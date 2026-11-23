@@ -29,7 +29,7 @@ public class AppleSignInActivity extends Activity
         try
         {
             String url = intent == null ? null : intent.getDataString();
-            Log.d( TAG, "HandleLink " + url );
+            Log.d( TAG, "HandleLink received: " + ( url != null ) ); // never log the url: it carries id_token / code / user
             AppleSignIn.OnSignInResponse( url );
         }
         catch( Exception e )

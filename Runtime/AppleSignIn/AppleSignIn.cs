@@ -114,7 +114,8 @@ namespace com.binouze
 
         public void OnAppleSignInResponse( string response )
         {
-            Log( $"OnAppleSignInResponse {response}" );
+            // the response carries id_token / code / user: never log it
+            Log( $"OnAppleSignInResponse received ({response?.Length ?? 0} chars)" );
             _flow.HandleResponse( response );
         }
 

@@ -14,7 +14,19 @@ namespace com.binouze
     public class SignInWithApple : MonoBehaviour
     {
         #if UNITY_ANDROID
-        internal static bool IsSupported = true;
+        // Android needs the web flow settings: without them the Apple button must not be offered
+        internal static bool IsSupported
+        {
+            get
+            {
+                if( Application.isEditor )
+                    return true;
+                var settings = SignInWithAppleOrGoogleSettings.LoadInstance();
+                return settings != null
+                    && !string.IsNullOrEmpty( settings.APPLECONNECT_CLIENT_ID )
+                    && !string.IsNullOrEmpty( settings.URL_APPLECONNECT_REDIRECT );
+            }
+        }
         #elif UNITY_IOS
         internal static bool IsSupported = AppleAuthManager.IsCurrentPlatformSupported;
         #else
@@ -121,7 +133,7 @@ namespace com.binouze
             void Complete( AppleSignInUser user )
             {
                 user ??= NewUser( AppleSignInStatusCode.Error, "no result" );
-                Log( $"ConnectComplete {user}" );
+                Log( $"ConnectComplete {user?.Status}" );
                 OnComplete?.Invoke( user );
             }
 

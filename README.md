@@ -123,6 +123,16 @@ Change the {REDIRECT_SCHEME} and {REDIRECT_HOST} to what is set in your redirect
 </activity>
 ```
 
+Also add this `queries` block as a direct child of `<manifest>` (merge it with an existing `<queries>` if you have one). Without it, Android 11+ cannot see the Custom Tabs service and the sign-in page falls back to the default browser.
+
+```xml
+<queries>
+  <intent>
+    <action android:name="android.support.customtabs.action.CustomTabsService" />
+  </intent>
+</queries>
+```
+
 
 ### Proguard rules to add:
 
