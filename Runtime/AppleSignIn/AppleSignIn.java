@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.browser.customtabs.CustomTabsCallback;
@@ -28,8 +29,17 @@ public class AppleSignIn
     private static String UrlScheme;
 
     // request in flight (set by signIn, cleared when the response is sent or cancelled)
+    private static final Object LOCK = new Object();
     private static boolean isActive;
     private static String  currentState;
+
+    private static boolean isCurrent( String state )
+    {
+        synchronized( LOCK )
+        {
+            return isActive && state != null && state.equals( currentState );
+        }
+    }
 
     public static void init( String clientID, String redirectURI, String scope, String urlScheme )
     {
@@ -43,12 +53,17 @@ public class AppleSignIn
 
     public static void signIn( final String state )
     {
+        // set synchronously (Unity thread) so a cancel() issued right after is ordered correctly
+        synchronized( LOCK )
+        {
+            isActive     = true;
+            currentState = state;
+        }
+
         final Activity activity = UnityPlayer.currentActivity;
         if( activity == null )
         {
             Log.e( TAG, "UnityPlayer.currentActivity is null in signIn" );
-            isActive     = true;
-            currentState = state;
             SendError( "no current activity" );
             return;
         }
@@ -61,8 +76,10 @@ public class AppleSignIn
                 try
                 {
                     unbindCustomTabsService();
-                    isActive     = true;
-                    currentState = state;
+
+                    // cancelled or superseded before this runnable ran
+                    if( !isCurrent( state ) )
+                        return;
 
                     String url = buildAuthUrl( state );
                     String pkg = CustomTabsClient.getPackageName( activity, null );
@@ -151,8 +168,10 @@ public class AppleSignIn
         try
         {
             JSONObject o = new JSONObject().put( "result", "error" ).put( "message", message == null ? "" : message );
-            if( currentState != null )
-                o.put( "state", currentState );
+            String st;
+            synchronized( LOCK ) { st = currentState; }
+            if( st != null )
+                o.put( "state", st );
             Send( o.toString() );
         }
         catch( Exception e )
@@ -164,10 +183,13 @@ public class AppleSignIn
     // sends at most one response per signIn
     private static void Send( String json )
     {
-        if( !isActive )
-            return;
-        isActive     = false;
-        currentState = null;
+        synchronized( LOCK )
+        {
+            if( !isActive )
+                return;
+            isActive     = false;
+            currentState = null;
+        }
 
         try
         {
@@ -177,15 +199,41 @@ public class AppleSignIn
         {
             Log.e( TAG, "UnitySendMessage exception: " + e.getMessage() );
         }
-        unbindCustomTabsService();
+        unbindOnUiThread();
     }
 
     /** Abandons the pending request. Sends nothing to Unity. */
     public static void cancel()
     {
-        isActive     = false;
-        currentState = null;
-        unbindCustomTabsService();
+        synchronized( LOCK )
+        {
+            isActive     = false;
+            currentState = null;
+        }
+
+        unbindOnUiThread();
+    }
+
+    // service teardown must happen on the UI thread, like the rest of the tab handling
+    private static void unbindOnUiThread()
+    {
+        if( Looper.myLooper() == Looper.getMainLooper() )
+        {
+            unbindCustomTabsService();
+            return;
+        }
+
+        Activity activity = UnityPlayer.currentActivity;
+        if( activity == null )
+            return;
+        activity.runOnUiThread( new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                unbindCustomTabsService();
+            }
+        } );
     }
 
     private static CustomTabsSession           customTabsSession;
@@ -250,8 +298,11 @@ public class AppleSignIn
     private static void show( Activity activity, String pkg, String url )
     {
         // cancelled or answered while the service was connecting
-        if( !isActive )
-            return;
+        synchronized( LOCK )
+        {
+            if( !isActive )
+                return;
+        }
 
         try
         {
@@ -269,7 +320,8 @@ public class AppleSignIn
         }
     }
 
-    public static void unbindCustomTabsService()
+    // must be called on the UI thread
+    private static void unbindCustomTabsService()
     {
         if( customTabsServiceConnection != null && boundActivity != null )
         {

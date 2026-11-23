@@ -13,6 +13,9 @@ namespace com.binouze
 
         public bool IsPending => _onComplete != null;
 
+        /// <summary>True when <paramref name="state"/> belongs to the request currently pending.</summary>
+        public bool IsCurrent( string state ) => IsPending && state != null && state == _state;
+
         public string Begin( Action<AppleSignInUser> onComplete )
         {
             var previous = _onComplete;

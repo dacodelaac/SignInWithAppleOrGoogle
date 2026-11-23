@@ -64,6 +64,12 @@ namespace com.binouze
             }
 
             var state = _flow.Begin( onComplete );
+
+            // Begin notifies the superseded callback, which may start a newer SignIn re-entrantly:
+            // then this call is obsolete and must not reach Java with a stale state.
+            if( !_flow.IsCurrent( state ) )
+                return;
+
             _requestId++;
             _leftApp = false;
 
