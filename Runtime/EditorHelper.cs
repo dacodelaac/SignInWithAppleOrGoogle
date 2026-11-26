@@ -92,7 +92,7 @@ namespace com.binouze
                 GUILayout.EndHorizontal();
                 
                 GUILayout.BeginHorizontal();
-                InputVal = GUILayout.TextField( InputVal );
+                InputVal = GUILayout.TextField( InputVal, GUILayout.ExpandWidth( true ) );
                 GUILayout.EndHorizontal();
                 
                 GUILayout.BeginHorizontal();
@@ -103,7 +103,7 @@ namespace com.binouze
                 if( GUILayout.Button( Bouton1 ) )
                 {
                     if( HasInput )
-                        Action1Input?.Invoke(InputVal);
+                        Action1Input?.Invoke(InputVal?.Trim());
                     else
                         Action1?.Invoke();
                     Close();

@@ -214,4 +214,8 @@ Once configured, it's pretty simple to use:
     
 ```
 
+## Editor testing
 
+In the Unity Editor, sign-in shows a small dialog instead of the native UI.
+- Paste a real `id_token` (Apple: captured from the game's `[AppleDebug]` device log; Google: from a device log) to sign in for real. Apple tokens expire after about 10 minutes.
+- Any other text is used as a fake user id (a real backend will reject it).

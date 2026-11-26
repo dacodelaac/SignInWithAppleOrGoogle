@@ -14,7 +14,42 @@ namespace com.binouze
     public class GoogleSignIn : MonoBehaviour
     {
         #if UNITY_EDITOR
-        private static string SUCCESS_RESPONSE => "{\"result\":{\"Status\":0,\"Email\":\"fakeuser@gmail.com\",\"FamilyName\":\"FAKE\",\"UserId\":\""+FAKE_UID+"\",\"DisplayName\":\"User FAKE\",\"GivenName\":\"User\",\"PhotoUrl\":\"\"}}";
+        private static string SUCCESS_RESPONSE
+        {
+            get
+            {
+                Dictionary<string,object> result;
+                if( EditorIdToken.TryParse( FAKE_UID, out var token, out var claims ) )
+                {
+                    // a real id_token pasted in the editor dialog
+                    result = new Dictionary<string,object>
+                    {
+                        { "Status",      0 },
+                        { "IdToken",     token },
+                        { "UserId",      EditorIdToken.Claim( claims, "sub" ) },
+                        { "Email",       EditorIdToken.Claim( claims, "email" ) },
+                        { "DisplayName", EditorIdToken.Claim( claims, "name" ) },
+                        { "GivenName",   EditorIdToken.Claim( claims, "given_name" ) },
+                        { "FamilyName",  EditorIdToken.Claim( claims, "family_name" ) },
+                        { "PhotoUrl",    EditorIdToken.Claim( claims, "picture" ) },
+                    };
+                }
+                else
+                {
+                    result = new Dictionary<string,object>
+                    {
+                        { "Status",      0 },
+                        { "Email",       "fakeuser@gmail.com" },
+                        { "FamilyName",  "FAKE" },
+                        { "UserId",      FAKE_UID ?? "" },
+                        { "DisplayName", "User FAKE" },
+                        { "GivenName",   "User" },
+                        { "PhotoUrl",    "" },
+                    };
+                }
+                return Json.Serialize( new Dictionary<string,object> { { "result", result } } );
+            }
+        }
         #endif
            
         /// <summary>

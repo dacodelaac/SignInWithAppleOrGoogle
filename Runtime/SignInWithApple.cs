@@ -139,7 +139,7 @@ namespace com.binouze
 
             if( Application.isEditor )
             {
-                EditorHelper.ShowInputDialog( "connecte apple ?", "oui", "non",
+                EditorHelper.ShowInputDialog( "Apple (Editor): nhap fake user id hoac dan id_token", "oui", "non",
                     fuid =>
                     {
                         AppleSignIn.FAKE_UID = fuid;

@@ -72,7 +72,7 @@ namespace com.binouze
                 
                 if( Application.isEditor )
                 {
-                    EditorHelper.ShowInputDialog( "connecte google ?", "oui", "non",
+                    EditorHelper.ShowInputDialog( "Google (Editor): nhap fake user id hoac dan id_token", "oui", "non",
                         uid =>
                         {
                             OnSignInResponse      = OnComplete;

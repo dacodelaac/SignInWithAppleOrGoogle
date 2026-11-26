@@ -122,6 +122,23 @@ namespace com.binouze
         #if UNITY_EDITOR
         private static string BuildEditorResponse( string state )
         {
+            // a real id_token pasted in the editor dialog is used as is
+            if( EditorIdToken.TryParse( FAKE_UID, out var realToken, out var claims ) )
+            {
+                var realUser = new Dictionary<string,object>();
+                var email    = EditorIdToken.Claim( claims, "email" );
+                if( email.Length > 0 )
+                    realUser["email"] = email;
+                return Json.Serialize( new Dictionary<string,object>
+                {
+                    { "result",   "success" },
+                    { "state",    state },
+                    { "id_token", realToken },
+                    { "code",     "editor" },
+                    { "user",     Json.Serialize( realUser ) },
+                } );
+            }
+
             var payload = Json.Serialize( new Dictionary<string,object> { { "sub", FAKE_UID ?? "fake" } } );
             var b64     = Convert.ToBase64String( Encoding.UTF8.GetBytes( payload ) ).TrimEnd( '=' ).Replace( '+', '-' ).Replace( '/', '_' );
             var user    = Json.Serialize( new Dictionary<string,object>
