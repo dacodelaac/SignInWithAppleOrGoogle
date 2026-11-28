@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.browser.customtabs.CustomTabsCallback;
@@ -53,6 +54,14 @@ public class AppleSignIn
 
     public static void signIn( final String state )
     {
+        signIn( state, null );
+    }
+
+    /** redirectURI: Return URL for this request only, null/empty = the one given to init. */
+    public static void signIn( final String state, final String redirectURI )
+    {
+        final String redirect = TextUtils.isEmpty( redirectURI ) ? RedirectURI : redirectURI;
+
         // set synchronously (Unity thread) so a cancel() issued right after is ordered correctly
         synchronized( LOCK )
         {
@@ -81,7 +90,7 @@ public class AppleSignIn
                     if( !isCurrent( state ) )
                         return;
 
-                    String url = buildAuthUrl( state );
+                    String url = buildAuthUrl( state, redirect );
                     String pkg = CustomTabsClient.getPackageName( activity, null );
                     if( pkg == null )
                     {
@@ -101,13 +110,13 @@ public class AppleSignIn
         } );
     }
 
-    private static String buildAuthUrl( String state ) throws Exception
+    private static String buildAuthUrl( String state, String redirect ) throws Exception
     {
         return "https://appleid.apple.com/auth/authorize?response_type=code%20id_token&response_mode=form_post"
              + "&client_id="    + ClientID
              + "&scope="        + Scope
              + "&state="        + state
-             + "&redirect_uri=" + URLEncoder.encode( RedirectURI, "UTF-8" );
+             + "&redirect_uri=" + URLEncoder.encode( redirect, "UTF-8" );
     }
 
     /** Called by AppleSignInActivity with the deep link opened by the redirect page. */

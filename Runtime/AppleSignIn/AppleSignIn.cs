@@ -52,7 +52,7 @@ namespace com.binouze
             IsInit = true;
         }
 
-        public void SignIn( Action<AppleSignInUser> onComplete )
+        public void SignIn( Action<AppleSignInUser> onComplete, string redirectUrl = null )
         {
             if( !IsInit )
             {
@@ -79,7 +79,7 @@ namespace com.binouze
             try
             {
                 using var cls = new AndroidJavaClass("com.binouze.AppleSignIn");
-                cls.CallStatic("signIn", state);
+                cls.CallStatic("signIn", state, redirectUrl ?? "");
             }
             catch( Exception e )
             {

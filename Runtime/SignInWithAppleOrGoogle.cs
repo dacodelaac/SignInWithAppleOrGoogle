@@ -88,13 +88,14 @@ namespace com.binouze
         /// </summary>
         /// <param name="OnComplete"></param>
         /// <param name="AppleID">ignored, kept for source compatibility</param>
-        public static void Apple_SignIn( Action<bool, AppleSignInUser> OnComplete, string AppleID = null )
+        /// <param name="redirectUrl">Android only: Return URL for this request; null/empty = settings value.</param>
+        public static void Apple_SignIn( Action<bool, AppleSignInUser> OnComplete, string AppleID = null, string redirectUrl = null )
         {
             SignInWithApple.Connect( user =>
             {
                 var ok = user.Status == AppleSignInStatusCode.Success && !string.IsNullOrEmpty( user.IdToken );
                 OnComplete?.Invoke( ok, user );
-            } );
+            }, redirectUrl );
         }
 
         /// <summary>

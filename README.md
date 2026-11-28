@@ -87,6 +87,16 @@ the cancel is detected when the app gets the focus back (`Status == Canceled`).
 
 ### Apple SignIn:
 
+#### 0. Per-call Return URL (optional)
+
+`Apple_SignIn` accepts an optional Android-only Return URL for that request, overriding "Apple Connect Redirect URL" of the settings
+(null or empty = settings value), for example to use a different server per environment.
+Every URL used must be registered in the Return URLs of the Services ID.
+
+```csharp
+SignInWithAppleOrGoogle.Apple_SignIn( cb, null, "https://.../apple/callback" );
+```
+
 #### 1. Redirect Page
 
 On Android, Apple sends connection data to an URL ("Apple Connect Redirect URL" in the settings, the Return URL of the Services ID) as POST variables.

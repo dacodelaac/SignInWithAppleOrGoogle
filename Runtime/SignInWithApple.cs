@@ -103,9 +103,9 @@ namespace com.binouze
             return new AppleSignInUser { Status = status, ErrorMessage = errorMessage };
         }
 
-        internal static void Connect( Action<AppleSignInUser> OnComplete )
+        internal static void Connect( Action<AppleSignInUser> OnComplete, string redirectUrl = null )
         {
-            GetInstance()._Connect( OnComplete );
+            GetInstance()._Connect( OnComplete, redirectUrl );
         }
         internal static void Disconnect( Action OnComplete )
         {
@@ -126,7 +126,7 @@ namespace com.binouze
         /// Lancer la connection a Apple ID, OnComplete est appele une seule fois avec un user non null
         /// </summary>
         /// <param name="OnComplete"></param>
-        private void _Connect( Action<AppleSignInUser> OnComplete )
+        private void _Connect( Action<AppleSignInUser> OnComplete, string redirectUrl = null )
         {
             Log( "Connect" );
 
@@ -143,7 +143,7 @@ namespace com.binouze
                     fuid =>
                     {
                         AppleSignIn.FAKE_UID = fuid;
-                        AppleSignIn.GetInstance().SignIn( Complete );
+                        AppleSignIn.GetInstance().SignIn( Complete, redirectUrl );
                     },
                     () =>
                     {
@@ -153,7 +153,7 @@ namespace com.binouze
             }
 
             #if UNITY_ANDROID
-            AppleSignIn.GetInstance().SignIn( Complete );
+            AppleSignIn.GetInstance().SignIn( Complete, redirectUrl );
             #elif UNITY_IOS
             if( !IsSupported || appleAuthManager == null )
             {
